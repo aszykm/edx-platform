@@ -14,13 +14,13 @@ from lms.djangoapps.course_home_api.progress.v1.serializers import ProgressTabSe
 from student.models import CourseEnrollment
 from lms.djangoapps.course_api.blocks.transformers.blocks_api import BlocksAPITransformer
 from lms.djangoapps.courseware.context_processor import user_timezone_locale_prefs
-from lms.djangoapps.courseware.courses import get_course_with_access
+from lms.djangoapps.courseware.courses import get_course_with_access, get_studio_url
 from lms.djangoapps.courseware.masquerade import setup_masquerade
 from lms.djangoapps.courseware.access import has_access
 from xmodule.modulestore.django import modulestore
 
-from lms.djangoapps.course_blocks.api import get_course_blocks
 import lms.djangoapps.course_blocks.api as course_blocks_api
+from lms.djangoapps.courseware.views.views import credit_course_requirements, get_cert_data
 from lms.djangoapps.grades.api import CourseGradeFactory
 from openedx.core.djangoapps.content.block_structure.transformers import BlockStructureTransformers
 
@@ -107,7 +107,6 @@ class ProgressTabView(RetrieveAPIView):
             BlocksAPITransformer(None, None, depth=3),
         ]
         course = get_course_with_access(request.user, 'load', course_key, check_if_enrolled=True)
-        course_blocks = get_course_blocks(request.user, course_usage_key, transformers, include_completion=True)
 
         enrollment_mode, _ = CourseEnrollment.enrollment_mode_for_user(request.user, course_key)
 
@@ -115,9 +114,11 @@ class ProgressTabView(RetrieveAPIView):
         courseware_summary = course_grade.chapter_grades.values()
 
         data = {
-            'course_blocks': course_blocks,
             'courseware_summary': courseware_summary,
+            'credit_course_requirements': credit_course_requirements(course_key, request.user),
             'enrollment_mode': enrollment_mode,
+            'certificate_data': get_cert_data(request.user, course, enrollment_mode, course_grade),
+            'studio_url': get_studio_url(course, 'settings/grading'),
             'user_timezone': user_timezone,
         }
         context = self.get_serializer_context()
