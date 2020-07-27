@@ -327,6 +327,10 @@ class CourseMetadata(object):
     def _has_requested_proctoring_provider_changed(current_provider, requested_provider):
         """
         Return whether the requested proctoring provider is different than the current proctoring provider, indicating
-        that the user has requested a change to the proctoring_provider Advanced Setting.
+        that the user has requested a change to the proctoring_provider Advanced Setting. 
         """
+        if requested_provider is None:
+            return False
+        else:
+            return current_provider != requested_provider
         return current_provider != requested_provider
