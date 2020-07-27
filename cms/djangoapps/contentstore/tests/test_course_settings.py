@@ -1289,13 +1289,6 @@ class CourseMetadataEditingTest(CourseTestCase):
         })
         self.assertEqual(response.status_code, 200)
 
-    def test_proctoring_provider_present(self):
-        """
-        Tests that proctoring provider field is not filtered out.
-        """
-        test_model = CourseMetadata.fetch(self.fullcourse)
-        self.assertIn('proctoring_provider', test_model)
-
     @ddt.data(True, False)
     @override_settings(
         PROCTORING_BACKENDS={
@@ -1336,47 +1329,6 @@ class CourseMetadataEditingTest(CourseTestCase):
                 )
             )
             self.assertIsNone(test_model)
-
-    @override_settings(
-        PROCTORING_BACKENDS={
-            'DEFAULT': 'test_proctoring_provider',
-            'test_proctoring_provider': {}
-        }
-    )
-    def test_validate_update_does_not_filter_out_proctoring_provider(self):
-        """
-        Tests that proctoring provider field is returned by validate_and_update_from_json method.
-        """
-        field_name = "proctoring_provider"
-
-        _, _, test_model = CourseMetadata.validate_and_update_from_json(
-            self.course,
-            {
-                field_name: {"value": 'test_proctoring_provider'},
-            },
-            user=self.user
-        )
-        self.assertIn(field_name, test_model)
-
-    @override_settings(
-        PROCTORING_BACKENDS={
-            'DEFAULT': 'test_proctoring_provider',
-            'test_proctoring_provider': {}
-        }
-    )
-    def test_update_from_json_does_not_filter_out_proctoring_provider(self):
-        """
-        Tests that proctoring provider field is returned by update_from_json method.
-        """
-        field_name = "proctoring_provider"
-        test_model = CourseMetadata.update_from_json(
-            self.course,
-            {
-                field_name: {"value": 'test_proctoring_provider'},
-            },
-            user=self.user
-        )
-        self.assertIn(field_name, test_model)
 
     @ddt.data(True, False)
     @override_settings(
