@@ -31,6 +31,7 @@ from openedx.core.djangoapps.content.block_structure.transformers import BlockSt
 from openedx.core.djangoapps.user_api.course_tag.api import get_course_tag, set_course_tag
 from openedx.features.course_experience import COURSE_ENABLE_UNENROLLED_ACCESS_FLAG, LATEST_UPDATE_FLAG
 from openedx.features.course_experience.course_tools import CourseToolsPluginManager
+from openedx.features.course_experience.utils import get_course_outline_block_tree, get_resume_block
 from openedx.features.course_experience.views.latest_update import LatestUpdateFragmentView
 from openedx.features.course_experience.views.welcome_message import PREFERENCE_KEY, WelcomeMessageFragmentView
 from student.models import CourseEnrollment
@@ -58,10 +59,6 @@ class OutlineTabView(RetrieveAPIView):
 
         Body consists of the following fields:
 
-        course_tools: List of serialized Course Tool objects. Each serialization has the following fields:
-            analytics_id: (str) The unique id given to the tool.
-            title: (str) The display title of the tool.
-            url: (str) The link to access the tool.
         course_blocks:
             blocks: List of serialized Course Block objects. Each serialization has the following fields:
                 id: (str) The usage ID of the block.
@@ -74,7 +71,31 @@ class OutlineTabView(RetrieveAPIView):
                     xBlock on the web LMS.
                 children: (list) If the block has child blocks, a list of IDs of
                     the child blocks.
+        course_tools: List of serialized Course Tool objects. Each serialization has the following fields:
+            analytics_id: (str) The unique id given to the tool.
+            title: (str) The display title of the tool.
+            url: (str) The link to access the tool.
+        dates_widget:
+            course_date_blocks: List of serialized Course Dates objects. Each serialization has the following fields:
+                complete: (bool) Meant to only be used by assignments. Indicates completeness for an
+                assignment.
+                date: (datetime) The date time corresponding for the event
+                date_type: (str) The type of date (ex. course-start-date, assignment-due-date, etc.)
+                description: (str) The description for the date event
+                learner_has_access: (bool) Indicates if the learner has access to the date event
+                link: (str) An absolute link to content related to the date event
+                    (ex. verified link or link to assignment)
+                title: (str) The title of the date event
+            dates_tab_link: (str) The URL to the Dates Tab
+            user_timezone: (str) The timezone of the given user
+        enroll_alert:
+            can_enroll: (bool) Whether the user can enroll in the given course
+            extra_text: (str)
         handouts_html: (str) Raw HTML for the handouts section of the course info
+        resume_course:
+            has_visited_course: (bool) Whether the user has ever visited the course
+            url: (str) The display name of the course block to resume
+        welcome_message_html: (str) Raw HTML for the course updates banner
 
     **Returns**
 
@@ -152,10 +173,31 @@ class OutlineTabView(RetrieveAPIView):
         transformers = BlockStructureTransformers()
         transformers += get_course_block_access_transformers(request.user)
         transformers += [
-            BlocksAPITransformer(None, None, depth=3),
+            BlocksAPITransformer(None, None, depth=4),
         ]
 
         course_blocks = get_course_blocks(request.user, course_usage_key, transformers, include_completion=True)
+
+        has_visited_course = False
+        resume_course_url = None
+        for block_key in course_blocks:
+            if course_blocks.get_xblock_field(block_key, 'category') == 'course':
+                if course_blocks.get_xblock_field(block_key, 'resume_block', False):
+                    has_visited_course = True
+                    resume_block_id = self._get_resume_block(course_blocks, block_key)
+                else:
+                    resume_block_id = self._get_start_block(course_blocks, block_key)
+                path = reverse('jump_to', kwargs={
+                    'course_id': course_key_string,
+                    'location': str(resume_block_id)
+                })
+                resume_course_url = request.build_absolute_uri(path)
+                break
+
+        resume_course = {
+            'has_visited_course': has_visited_course,
+            'url': resume_course_url,
+        }
 
         dates_widget = {
             'course_date_blocks': [block for block in date_blocks if not isinstance(block, TodaysDate)],
@@ -169,6 +211,7 @@ class OutlineTabView(RetrieveAPIView):
             'dates_widget': dates_widget,
             'enroll_alert': enroll_alert,
             'handouts_html': handouts_html,
+            'resume_course': resume_course,
             'welcome_message_html': welcome_message_html,
         }
         context = self.get_serializer_context()
@@ -176,6 +219,25 @@ class OutlineTabView(RetrieveAPIView):
         serializer = self.get_serializer_class()(data, context=context)
 
         return Response(serializer.data)
+
+    def _get_start_block(self, blocks, block):
+        if not blocks.get_children(block):
+            return block
+
+        children = blocks.get_children(block)
+        start_block = self._get_start_block(blocks, children[0])
+        return start_block
+
+    def _get_resume_block(self, blocks, block):
+        if not blocks.get_children(block):
+            return block
+
+        children = blocks.get_children(block)
+        for child in children:
+            is_resume_block = blocks.get_xblock_field(child, 'resume_block', False)
+            if is_resume_block:
+                resume_block = self._get_resume_block(blocks, child)
+        return resume_block
 
 
 @api_view(['POST'])

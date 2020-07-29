@@ -40,6 +40,7 @@ class CourseBlockSerializer(serializers.Serializer):
                     request=self.context['request'],
                 ),
                 'children': [str(child_key) for child_key in blocks.get_children(block_key)],
+                'resume_block': blocks.get_xblock_field(block_key, 'resume_block', None),
             }
             for block_key in blocks
         }
@@ -62,6 +63,11 @@ class EnrollAlertSerializer(serializers.Serializer):
     extra_text = serializers.CharField()
 
 
+class ResumeCourseSerializer(serializers.Serializer):
+    has_visited_course = serializers.BooleanField()
+    url = serializers.CharField()
+
+
 class OutlineTabSerializer(serializers.Serializer):
     """
     Serializer for the Outline Tab
@@ -71,4 +77,5 @@ class OutlineTabSerializer(serializers.Serializer):
     dates_widget = DatesWidgetSerializer()
     enroll_alert = EnrollAlertSerializer()
     handouts_html = serializers.CharField()
+    resume_course = ResumeCourseSerializer()
     welcome_message_html = serializers.CharField()
