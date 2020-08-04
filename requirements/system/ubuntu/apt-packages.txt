@@ -37,3 +37,4 @@ libgeos-ruby1.8
 lynx-cur
 libxmlsec1-dev
 swig
+python-psycopg2
