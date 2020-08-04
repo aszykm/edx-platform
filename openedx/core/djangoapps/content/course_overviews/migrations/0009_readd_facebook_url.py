@@ -14,12 +14,20 @@ def table_description():
     if connection.vendor == 'sqlite':
         fields = connection.introspection.get_table_description(connection.cursor(), 'course_overviews_courseoverview')
         return [f.name for f in fields]
+    elif connection.vendor == 'postgresql':
+        cursor = connection.cursor()
+        cursor.execute("""
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_name = 'course_overviews_courseoverview' AND table_schema = current_database()""")
+        rows = cursor.fetchall()
+        return [r[0] for r in rows]        
     else:
         cursor = connection.cursor()
         cursor.execute("""
             SELECT column_name
             FROM information_schema.columns
-            WHERE table_name = 'course_overviews_courseoverview'""")
+            WHERE table_name = 'course_overviews_courseoverview' AND table_schema = DATABASE()""")
         rows = cursor.fetchall()
         return [r[0] for r in rows]
 
