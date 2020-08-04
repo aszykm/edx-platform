@@ -11,20 +11,17 @@ def table_description():
     # For not-sqlite, query information-schema directly with code lifted
     # from the internals of django.db.backends.mysql.introspection.py
 
-    # if connection.vendor == 'sqlite':
-    #     fields = connection.introspection.get_table_description(connection.cursor(), 'course_overviews_courseoverview')
-    #     return [f.name for f in fields]
-    # else:
-    #     cursor = connection.cursor()
-    #     cursor.execute("""
-    #         SELECT column_name
-    #         FROM information_schema.columns
-    #         WHERE table_name = 'course_overviews_courseoverview' AND table_schema = DATABASE()""")
-    #     rows = cursor.fetchall()
-    #     return [r[0] for r in rows]
-
-    fields = connection.introspection.get_table_description(connection.cursor(), 'course_overviews_courseoverview')
-    return [f.name for f in fields]
+    if connection.vendor == 'sqlite':
+        fields = connection.introspection.get_table_description(connection.cursor(), 'course_overviews_courseoverview')
+        return [f.name for f in fields]
+    else:
+        cursor = connection.cursor()
+        cursor.execute("""
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_name = 'course_overviews_courseoverview'""")
+        rows = cursor.fetchall()
+        return [r[0] for r in rows]
 
 
 class Migration(migrations.Migration):
