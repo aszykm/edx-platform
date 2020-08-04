@@ -54,6 +54,7 @@ django-method-override              # Allow use of HTTP methods normally not sup
 django-model-utils
 django-mptt
 django-mysql
+django-postgresql
 django-oauth-toolkit                # Provides oAuth2 capabilities for Django
 django-pipeline
 django-pyfs
