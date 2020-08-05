@@ -21,8 +21,11 @@ class CsmBigInt(AlterField):
         to_model = to_state.apps.get_model(app_label, self.model_name)
         if schema_editor.connection.alias == 'student_module_history':
             if settings.FEATURES["ENABLE_CSMH_EXTENDED"]:
-		        if schema_editor.connection.vendor == 'postgresql':
+                
+                if schema_editor.connection.vendor == 'postgresql':
+
                     schema_editor.execute("ALTER TABLE coursewarehistoryextended_studentmodulehistoryextended ALTER COLUMN student_module_id TYPE bigint UNSIGNED NOT NULL;")
+                    
 		        else:
                     schema_editor.execute("ALTER TABLE coursewarehistoryextended_studentmodulehistoryextended MODIFY student_module_id bigint UNSIGNED NOT NULL;")
 
