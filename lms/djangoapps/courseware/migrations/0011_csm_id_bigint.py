@@ -31,7 +31,7 @@ class CsmBigInt(AlterField):
 
 		elif self.allow_migrate_model(schema_editor.connection.alias, to_model):
 			if schema_editor.connection.vendor == 'postgresql':
-				schema_editor.execute("ALTER TABLE courseware_studentmodule ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY;")
+				schema_editor.execute("ALTER TABLE courseware_studentmodule ALTER COLUMN id SET NOT NULL;")
 			else:
 				schema_editor.execute("ALTER TABLE courseware_studentmodule MODIFY id bigint UNSIGNED AUTO_INCREMENT NOT NULL;")
 
