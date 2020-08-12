@@ -41,14 +41,13 @@ def connect_to_mongodb(
         if read_preference is not None:
             kwargs['read_preference'] = read_preference
 
+    args = "ssl=true&retrywrites=false&ssl_cert_reqs=CERT_NONE"
+
+ #   connection_uri = f"mongodb://{username}:{password}@{host}:{port}/?{args}"
+    connection_uri = f"mongodb://{username}:{password}@{host}:{port}/?ssl=true&replicaSet=globaldb"
+
     mongo_conn = pymongo.database.Database(
-        mongo_client_class(
-            host=host,
-            port=port,
-            tz_aware=tz_aware,
-            document_class=dict,
-            **kwargs
-        ),
+        mongo_client_class(connection_uri),
         db
     )
 
@@ -58,9 +57,9 @@ def connect_to_mongodb(
             wait_time=retry_wait_time
         )
 
-    # If credentials were provided, authenticate the user.
-    if user is not None and password is not None:
-        mongo_conn.authenticate(user, password)
+    # # If credentials were provided, authenticate the user.
+    # if user is not None and password is not None:
+    #     mongo_conn.authenticate(user, password)
 
     return mongo_conn
 
