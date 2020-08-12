@@ -44,7 +44,7 @@ def connect_to_mongodb(
     args = "ssl=true&retrywrites=false&ssl_cert_reqs=CERT_NONE"
 
  #   connection_uri = f"mongodb://{username}:{password}@{host}:{port}/?{args}"
-    connection_uri = "mongodb://{}:{}@{}:{}/?ssl=true&replicaSet=globaldb".format(username, password, host, port)
+    connection_uri = "mongodb://{}:{}@{}:{}/?ssl=true&replicaSet=globaldb".format(user, password, host, port)
 
     mongo_conn = pymongo.database.Database(
         mongo_client_class(connection_uri),
