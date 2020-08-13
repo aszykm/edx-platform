@@ -41,14 +41,6 @@ def connect_to_mongodb(
         if read_preference is not None:
             kwargs['read_preference'] = read_preference
 
-<<<<<<< HEAD
-    args = "ssl=true&retrywrites=false&ssl_cert_reqs=CERT_NONE"
-
- #   connection_uri = f"mongodb://{username}:{password}@{host}:{port}/?{args}"
-    connection_uri = "mongodb://{}:{}@{}:{}/?ssl=true&replicaSet=globaldb".format(user, password, host, port)
-
-=======
->>>>>>> parent of eff8f246b1... Change connection to mongoDB
     mongo_conn = pymongo.database.Database(
         mongo_client_class(
             host=host,
