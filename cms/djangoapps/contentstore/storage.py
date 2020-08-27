@@ -13,7 +13,7 @@ from storages.utils import setting
 class ImportExportAzureStorage(AzureStorage):
     def __init__(self):
         azure_container = setting("COURSE_IMPORT_EXPORT_CONTAINER", settings.AZURE_CONTAINER)
-        super(ImportExportAzureStorage, self).__init(container=azure_container)
+        super(ImportExportAzureStorage, self).__init__()
 
 
 class ImportExportS3Storage(S3BotoStorage):  # pylint: disable=abstract-method
