@@ -6,11 +6,14 @@ import json
 import logging
 from contextlib import closing
 from datetime import datetime, timedelta
+
+from azure.storage import AccessPolicy
+from azure.storage.blob import BlobService, BlobSharedAccessPermissions
+from django.core.files.storage import get_storage_class
 from pytz import UTC
 from uuid import uuid4
 
 import rfc6266_parser
-from boto import s3
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.contrib.staticfiles.storage import staticfiles_storage
@@ -35,6 +38,7 @@ from edxval.api import (
     get_available_transcript_languages
 )
 from opaque_keys.edx.keys import CourseKey
+from storages.backends.azure_storage import AzureStorage
 from xmodule.video_module.transcripts_utils import Transcript
 
 from contentstore.models import VideoUploadConfig
@@ -73,7 +77,7 @@ ENABLE_VIDEO_UPLOAD_PAGINATION = CourseWaffleFlag(
     flag_undefined_default=False
 )
 # Default expiration, in seconds, of one-time URLs used for uploading videos.
-KEY_EXPIRATION_IN_SECONDS = 86400
+SAS_EXPIRATION = timedelta(seconds=86400)
 
 VIDEO_SUPPORTED_FILE_FORMATS = {
     '.mp4': 'video/mp4',
@@ -700,7 +704,8 @@ def videos_post(course, request):
     if error:
         return JsonResponse({'error': error}, status=400)
 
-    bucket = storage_service_bucket()
+    azure_storage = get_storage_class()()  # type: AzureStorage
+    azure_service = azure_storage.connection
     req_files = data['files']
     resp_files = []
 
@@ -714,12 +719,11 @@ def videos_post(course, request):
             return JsonResponse({'error': error_msg}, status=400)
 
         edx_video_id = unicode(uuid4())
-        key = storage_service_key(bucket, file_name=edx_video_id)
 
-        metadata_list = [
-            ('client_video_id', file_name),
-            ('course_key', unicode(course.id)),
-        ]
+        metadata = {
+            'client_video_id': file_name,
+            'course_key': unicode(course.id),
+        }
 
         deprecate_youtube = waffle_flags()[DEPRECATE_YOUTUBE]
         course_video_upload_token = course.video_upload_pipeline.get('course_video_upload_token')
@@ -727,20 +731,34 @@ def videos_post(course, request):
         # Only include `course_video_upload_token` if youtube has not been deprecated
         # for this course.
         if not deprecate_youtube.is_enabled(course.id) and course_video_upload_token:
-            metadata_list.append(('course_video_upload_token', course_video_upload_token))
+            metadata['course_video_upload_token'] = course_video_upload_token
 
         is_video_transcript_enabled = VideoTranscriptEnabledFlag.feature_enabled(course.id)
         if is_video_transcript_enabled:
             transcript_preferences = get_transcript_preferences(unicode(course.id))
             if transcript_preferences is not None:
-                metadata_list.append(('transcript_preferences', json.dumps(transcript_preferences)))
+                metadata['transcript_preferences'] = json.dumps(transcript_preferences)
 
-        for metadata_name, value in metadata_list:
-            key.set_metadata(metadata_name, value)
-        upload_url = key.generate_url(
-            KEY_EXPIRATION_IN_SECONDS,
-            'PUT',
-            headers={'Content-Type': req_file['content_type']}
+        azure_service.set_blob_metadata(
+            container_name=azure_storage.azure_container,
+            blob_name=edx_video_id,
+            x_ms_meta_name_values=metadata
+        )
+
+        accss_plcy = AccessPolicy()
+        accss_plcy.expiry = (datetime.utcnow() + SAS_EXPIRATION).strftime('%Y-%m-%dT%H:%MZ')
+        accss_plcy.permission = BlobSharedAccessPermissions.WRITE
+
+        sas_token = azure_service.generate_shared_access_signature(
+            container_name=azure_storage.azure_container,
+            blob_name=edx_video_id,
+            shared_access_policy=BlobSharedAccessPermissions.WRITE,
+            content_type=req_file['content_type']
+        )
+        upload_url = azure_service.make_blob_url(
+            container_name=azure_storage.azure_container,
+            blob_name=edx_video_id,
+            sas_token=sas_token
         )
 
         # persist edx_video_id in VAL
@@ -756,32 +774,6 @@ def videos_post(course, request):
         resp_files.append({'file_name': file_name, 'upload_url': upload_url, 'edx_video_id': edx_video_id})
 
     return JsonResponse({'files': resp_files}, status=200)
-
-
-def storage_service_bucket():
-    """
-    Returns an S3 bucket for video uploads.
-    """
-    conn = s3.connection.S3Connection(
-        settings.AWS_ACCESS_KEY_ID,
-        settings.AWS_SECRET_ACCESS_KEY
-    )
-    # We don't need to validate our bucket, it requires a very permissive IAM permission
-    # set since behind the scenes it fires a HEAD request that is equivalent to get_all_keys()
-    # meaning it would need ListObjects on the whole bucket, not just the path used in each
-    # environment (since we share a single bucket for multiple deployments in some configurations)
-    return conn.get_bucket(settings.VIDEO_UPLOAD_PIPELINE["BUCKET"], validate=False)
-
-
-def storage_service_key(bucket, file_name):
-    """
-    Returns an S3 key to the given file in the given bucket.
-    """
-    key_name = "{}/{}".format(
-        settings.VIDEO_UPLOAD_PIPELINE.get("ROOT_PATH", ""),
-        file_name
-    )
-    return s3.key.Key(bucket, key_name)
 
 
 def send_video_status_update(updates):

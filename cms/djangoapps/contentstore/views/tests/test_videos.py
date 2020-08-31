@@ -34,7 +34,7 @@ from contentstore.views.videos import (
     WAFFLE_SWITCHES,
     TranscriptProvider
 )
-from contentstore.views.videos import KEY_EXPIRATION_IN_SECONDS, StatusDisplayStrings, convert_video_status
+from contentstore.views.videos import SAS_EXPIRATION, StatusDisplayStrings, convert_video_status
 from xmodule.modulestore.tests.factories import CourseFactory
 
 from openedx.core.djangoapps.video_pipeline.config.waffle import waffle_flags, DEPRECATE_YOUTUBE
@@ -524,7 +524,7 @@ class VideosHandlerTestCase(VideoUploadTestMixin, CourseTestCase):
             )
             mock_key_instance.set_metadata.assert_any_call('course_key', unicode(self.course.id))
             mock_key_instance.generate_url.assert_called_once_with(
-                KEY_EXPIRATION_IN_SECONDS,
+                SAS_EXPIRATION,
                 'PUT',
                 headers={'Content-Type': file_info['content_type']}
             )
