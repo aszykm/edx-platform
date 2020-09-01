@@ -7,8 +7,8 @@ import logging
 from contextlib import closing
 from datetime import datetime, timedelta
 
-from azure.storage import AccessPolicy
-from azure.storage.blob import BlobService, BlobSharedAccessPermissions
+from azure.storage import AccessPolicy, SharedAccessPolicy
+from azure.storage.blob import BlobSharedAccessPermissions
 from django.core.files.storage import get_storage_class
 from pytz import UTC
 from uuid import uuid4
@@ -208,7 +208,6 @@ def videos_handler(request, course_key_string, edx_video_id=None):
 @login_required
 @require_POST
 def video_images_handler(request, course_key_string, edx_video_id=None):
-
     # respond with a 404 if image upload is not enabled.
     if not WAFFLE_SWITCHES.is_enabled(VIDEO_IMAGE_UPLOAD_ENABLED):
         return HttpResponseNotFound()
@@ -452,10 +451,10 @@ def _get_and_validate_course(course_key_string, user):
     course = get_course_and_check_access(course_key, user)
 
     if (
-            settings.FEATURES["ENABLE_VIDEO_UPLOAD_PIPELINE"] and
-            getattr(settings, "VIDEO_UPLOAD_PIPELINE", None) and
-            course and
-            course.video_pipeline_configured
+        settings.FEATURES["ENABLE_VIDEO_UPLOAD_PIPELINE"] and
+        getattr(settings, "VIDEO_UPLOAD_PIPELINE", None) and
+        course and
+        course.video_pipeline_configured
     ):
         return course
     else:
@@ -561,10 +560,11 @@ def _get_index_videos(course, pagination_conf=None):
                 values[attr] = video[attr]
 
         return values
+
     videos, pagination_context = _get_videos(course, pagination_conf)
     return [
-        _get_values(video) for video in videos
-    ], pagination_context
+               _get_values(video) for video in videos
+           ], pagination_context
 
 
 def get_all_transcript_languages():
@@ -691,13 +691,13 @@ def videos_post(course, request):
     if 'files' not in data:
         error = "Request object is not JSON or does not contain 'files'"
     elif any(
-            'file_name' not in file or 'content_type' not in file
-            for file in data['files']
+        'file_name' not in file or 'content_type' not in file
+        for file in data['files']
     ):
         error = "Request 'files' entry does not contain 'file_name' and 'content_type'"
     elif any(
-            file['content_type'] not in VIDEO_SUPPORTED_FILE_FORMATS.values()
-            for file in data['files']
+        file['content_type'] not in VIDEO_SUPPORTED_FILE_FORMATS.values()
+        for file in data['files']
     ):
         error = "Request 'files' entry contain unsupported content_type"
 
@@ -745,14 +745,15 @@ def videos_post(course, request):
             x_ms_meta_name_values=metadata
         )
 
-        accss_plcy = AccessPolicy()
-        accss_plcy.expiry = (datetime.utcnow() + SAS_EXPIRATION).strftime('%Y-%m-%dT%H:%MZ')
-        accss_plcy.permission = BlobSharedAccessPermissions.WRITE
+        accss_plcy = AccessPolicy(
+            expiry=(datetime.utcnow() + SAS_EXPIRATION).strftime('%Y-%m-%dT%H:%MZ'),
+            permission=BlobSharedAccessPermissions.WRITE
+        )
 
         sas_token = azure_service.generate_shared_access_signature(
             container_name=azure_storage.azure_container,
             blob_name=edx_video_id,
-            shared_access_policy=BlobSharedAccessPermissions.WRITE,
+            shared_access_policy=SharedAccessPolicy(accss_plcy),
             content_type=req_file['content_type']
         )
         upload_url = azure_service.make_blob_url(

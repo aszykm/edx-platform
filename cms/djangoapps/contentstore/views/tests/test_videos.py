@@ -452,9 +452,8 @@ class VideosHandlerTestCase(VideoUploadTestMixin, CourseTestCase):
         self.assertEqual(response['error'], 'The file name for %s must contain only ASCII characters.' % file_name)
 
     @override_settings(AWS_ACCESS_KEY_ID='test_key_id', AWS_SECRET_ACCESS_KEY='test_secret')
-    @patch('boto.s3.key.Key')
-    @patch('boto.s3.connection.S3Connection')
-    def test_post_success(self, mock_conn, mock_key):
+    @patch('django.core.files.storage.get_storage_class')
+    def test_post_success(self, storage_cls):
         files = [
             {
                 'file_name': 'first.mp4',
@@ -475,17 +474,20 @@ class VideosHandlerTestCase(VideoUploadTestMixin, CourseTestCase):
         ]
 
         bucket = Mock()
-        mock_conn.return_value = Mock(get_bucket=Mock(return_value=bucket))
-        mock_key_instances = [
-            Mock(
-                generate_url=Mock(
-                    return_value='http://example.com/url_{}'.format(file_info['file_name'])
-                )
-            )
-            for file_info in files
-        ]
-        # If extra calls are made, return a dummy
-        mock_key.side_effect = mock_key_instances + [Mock()]
+        azure_service = Mock()
+        azure_container = 'container_name'
+        storage_cls.return_value = Mock(connection=azure_service, azure_container=azure_container)
+
+        sas_tokens = ['sas_token_' + f['file_name'] for f in files]
+        generate_sas_token = Mock(side_effect=sas_tokens)
+        azure_service.generate_shared_access_signature = generate_sas_token
+
+        urls = ['http://example.com/url_' + f['file_name'] for f in files]
+        generate_url = Mock(side_effect=urls)
+        azure_service.make_blob_url = generate_url
+
+        set_metadata = Mock()
+        azure_service.set_blob_metadata = set_metadata
 
         response = self.client.post(
             self.url,
@@ -495,13 +497,17 @@ class VideosHandlerTestCase(VideoUploadTestMixin, CourseTestCase):
         self.assertEqual(response.status_code, 200)
         response_obj = json.loads(response.content)
 
-        mock_conn.assert_called_once_with(settings.AWS_ACCESS_KEY_ID, settings.AWS_SECRET_ACCESS_KEY)
         self.assertEqual(len(response_obj['files']), len(files))
-        self.assertEqual(mock_key.call_count, len(files))
+        self.assertEqual(generate_sas_token.call_count, len(files))
+        self.assertEqual(generate_url.call_count, len(files))
         for i, file_info in enumerate(files):
             # Ensure Key was set up correctly and extract id
-            key_call_args, __ = mock_key.call_args_list[i]
-            self.assertEqual(key_call_args[0], bucket)
+            given_call = set_metadata.call_args_list[i]
+
+
+            self.assertEqual(call_kwargs, {
+
+            })
             path_match = re.match(
                 (
                     settings.VIDEO_UPLOAD_PIPELINE['ROOT_PATH'] +
