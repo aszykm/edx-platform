@@ -719,6 +719,10 @@ def videos_post(course, request):
             return JsonResponse({'error': error_msg}, status=400)
 
         edx_video_id = unicode(uuid4())
+        blob_name = "{}/{}".format(
+            settings.VIDEO_UPLOAD_PIPELINE.get("ROOT_PATH", ""),
+            file_name
+        )
 
         metadata = {
             'client_video_id': file_name,
@@ -741,7 +745,7 @@ def videos_post(course, request):
 
         azure_service.set_blob_metadata(
             container_name=azure_storage.azure_container,
-            blob_name=edx_video_id,
+            blob_name=blob_name,
             x_ms_meta_name_values=metadata
         )
 
@@ -752,13 +756,13 @@ def videos_post(course, request):
 
         sas_token = azure_service.generate_shared_access_signature(
             container_name=azure_storage.azure_container,
-            blob_name=edx_video_id,
+            blob_name=blob_name,
             shared_access_policy=SharedAccessPolicy(accss_plcy),
             content_type=req_file['content_type']
         )
         upload_url = azure_service.make_blob_url(
             container_name=azure_storage.azure_container,
-            blob_name=edx_video_id,
+            blob_name=blob_name,
             sas_token=sas_token
         )
 

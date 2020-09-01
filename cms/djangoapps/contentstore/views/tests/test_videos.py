@@ -5,7 +5,7 @@ Unit tests for video-related REST APIs.
 import csv
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import wraps
 from StringIO import StringIO
 from contextlib import contextmanager
@@ -13,6 +13,8 @@ from contextlib import contextmanager
 import dateutil.parser
 import ddt
 import pytz
+from azure.storage import SharedAccessPolicy, AccessPolicy
+from azure.storage.blob import BlobSharedAccessPermissions
 from django.conf import settings
 from django.test.utils import override_settings
 from edxval.api import (
@@ -22,7 +24,7 @@ from edxval.api import (
     get_course_video_image_url,
     create_or_update_video_transcript
 )
-from mock import Mock, patch
+from mock import Mock, patch, call
 
 from contentstore.models import VideoUploadConfig
 from contentstore.tests.utils import CourseTestCase
@@ -453,7 +455,8 @@ class VideosHandlerTestCase(VideoUploadTestMixin, CourseTestCase):
 
     @override_settings(AWS_ACCESS_KEY_ID='test_key_id', AWS_SECRET_ACCESS_KEY='test_secret')
     @patch('django.core.files.storage.get_storage_class')
-    def test_post_success(self, storage_cls):
+    @patch('contentstore.vies.videos.datetime')
+    def test_post_success(self, dt_mock, storage_cls):
         files = [
             {
                 'file_name': 'first.mp4',
@@ -473,7 +476,7 @@ class VideosHandlerTestCase(VideoUploadTestMixin, CourseTestCase):
             },
         ]
 
-        bucket = Mock()
+        dt_mock.utcnow = Mock(return_value=datetime(year=2000, month=1, day=1))
         azure_service = Mock()
         azure_container = 'container_name'
         storage_cls.return_value = Mock(connection=azure_service, azure_container=azure_container)
@@ -502,38 +505,44 @@ class VideosHandlerTestCase(VideoUploadTestMixin, CourseTestCase):
         self.assertEqual(generate_url.call_count, len(files))
         for i, file_info in enumerate(files):
             # Ensure Key was set up correctly and extract id
-            given_call = set_metadata.call_args_list[i]
+            _, set_metadata_kwargs = set_metadata.call_args_list[i]
+            self.assertEqual(set_metadata_kwargs['container_name'], azure_container)
 
-
-            self.assertEqual(call_kwargs, {
-
-            })
+            blob_name = set_metadata_kwargs['blob_name']
             path_match = re.match(
                 (
                     settings.VIDEO_UPLOAD_PIPELINE['ROOT_PATH'] +
                     '/([a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12})$'
                 ),
-                key_call_args[1]
+                blob_name
             )
             self.assertIsNotNone(path_match)
             video_id = path_match.group(1)
-            mock_key_instance = mock_key_instances[i]
 
-            mock_key_instance.set_metadata.assert_any_call(
-                'course_video_upload_token',
-                self.test_token
-            )
+            expected_metadata = {
+                'course_video_upload_token': self.test_token,
+                'client_video_id': file_info['file_name'],
+                'course_key': unicode(self.course.id),
 
-            mock_key_instance.set_metadata.assert_any_call(
-                'client_video_id',
-                file_info['file_name']
-            )
-            mock_key_instance.set_metadata.assert_any_call('course_key', unicode(self.course.id))
-            mock_key_instance.generate_url.assert_called_once_with(
-                SAS_EXPIRATION,
-                'PUT',
-                headers={'Content-Type': file_info['content_type']}
-            )
+            }
+
+            self.assertEqual(set_metadata_kwargs['x_ms_meta_name_values'], expected_metadata)
+
+            _, sas_token_kwargs = generate_sas_token.call_args_list[i]
+            self.assertEqual(sas_token_kwargs['container_name'], azure_container)
+            self.assertEqual(sas_token_kwargs['blob_name'], blob_name)
+            self.assertEqual(sas_token_kwargs['content_type'], file_info['content_type'])
+            access_policy = sas_token_kwargs['shared_access_policy']
+            self.assertIsInstance(access_policy, SharedAccessPolicy)
+            self.assertIsInstance(access_policy.access_policy, AccessPolicy)
+            self.assertEqual(access_policy.access_policy.permission, BlobSharedAccessPermissions.WRITE)
+            self.assertEqual(access_policy.access_policy.expiry, (dt_mock.utcnow() + timedelta(days=1)).strftime('%Y-%m-%dT%H:%MZ'))
+
+            self.assertEqual(generate_url.call_args_list, call(
+                container_name=azure_container,
+                blob_name=blob_name,
+                sas_token=sas_tokens[i]
+            ))
 
             # Ensure VAL was updated
             val_info = get_video_info(video_id)
@@ -546,7 +555,7 @@ class VideosHandlerTestCase(VideoUploadTestMixin, CourseTestCase):
             # Ensure response is correct
             response_file = response_obj['files'][i]
             self.assertEqual(response_file['file_name'], file_info['file_name'])
-            self.assertEqual(response_file['upload_url'], mock_key_instance.generate_url())
+            self.assertEqual(response_file['upload_url'], urls[i])
 
     @override_settings(AWS_ACCESS_KEY_ID='test_key_id', AWS_SECRET_ACCESS_KEY='test_secret')
     @patch('boto.s3.key.Key')
