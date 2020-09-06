@@ -298,11 +298,11 @@ class MongoContentStore(ContentStore):
             })
 
         items = self.fs_files.aggregate(pipeline_stages)
-        if items['result']:
-            result = items['result'][0]
+        try:
+            result = next(items)
             count = result['count']
             assets = list(result['results'])
-        else:
+        except StopIteration:
             # no results
             count = 0
             assets = []

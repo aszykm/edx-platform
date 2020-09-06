@@ -68,7 +68,7 @@ class Command(BaseCommand):
         active_version_collection = split_modulestore.db_connection.course_index
         structure_collection = split_modulestore.db_connection.structures
 
-        branches = active_version_collection.aggregate([{
+        branches = next(active_version_collection.aggregate([{
             '$group': {
                 '_id': 1,
                 'draft': {'$push': '$versions.draft-branch'},
@@ -79,7 +79,7 @@ class Command(BaseCommand):
                 '_id': 1,
                 'branches': {'$setUnion': ['$draft', '$published']}
             }
-        }])['result'][0]['branches']
+        }]))['branches']
 
         structures = list(
             structure_collection.find({
