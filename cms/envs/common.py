@@ -1196,13 +1196,11 @@ TRACK_MAX_EVENT = 50000
 
 TRACKING_BACKENDS = {
     'logger': {
-        'ENGINE': 'track.backends.logger.LoggerBackend',
-        'OPTIONS': {
-            'name': 'tracking'
-        }
+        'ENGINE': 'track.backends.null.NullBackend',
+        'OPTIONS': {}
     }
 }
-
+from eventtracking.backends.logger import LoggerBackend
 # We're already logging events, and we don't want to capture user
 # names/passwords.  Heartbeat events are likely not interesting.
 TRACKING_IGNORE_URL_PATTERNS = [r'^/event', r'^/login', r'^/heartbeat']
@@ -1214,11 +1212,8 @@ EVENT_TRACKING_BACKENDS = {
         'OPTIONS': {
             'backends': {
                 'logger': {
-                    'ENGINE': 'eventtracking.backends.logger.LoggerBackend',
-                    'OPTIONS': {
-                        'name': 'tracking',
-                        'max_event_size': TRACK_MAX_EVENT,
-                    }
+                    'ENGINE': 'track.backends.null.NullBackend',
+                    'OPTIONS': {}
                 }
             },
             'processors': [

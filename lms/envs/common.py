@@ -750,10 +750,8 @@ DEBUG_TRACK_LOG = False
 
 TRACKING_BACKENDS = {
     'logger': {
-        'ENGINE': 'track.backends.logger.LoggerBackend',
-        'OPTIONS': {
-            'name': 'tracking'
-        }
+        'ENGINE': 'track.backends.null.NullBackend',
+        'OPTIONS': {}
     }
 }
 
@@ -768,11 +766,8 @@ EVENT_TRACKING_BACKENDS = {
         'OPTIONS': {
             'backends': {
                 'logger': {
-                    'ENGINE': 'eventtracking.backends.logger.LoggerBackend',
-                    'OPTIONS': {
-                        'name': 'tracking',
-                        'max_event_size': TRACK_MAX_EVENT,
-                    }
+                    'ENGINE': 'track.backends.null.NullBackend',
+                    'OPTIONS': {}
                 }
             },
             'processors': [
